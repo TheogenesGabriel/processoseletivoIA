@@ -85,28 +85,68 @@ projetos/1-classificacao-mnist/
 
 ## 📝 Relatório do Candidato
 
-👤 **Nome Completo:**
+👤 **Nome Completo:** Theógenes Gabriel Araújo de Andrade
 
 ### 1️⃣ Resumo da Arquitetura do Modelo
 
-Descreva, em palavras, a arquitetura da CNN implementada em `train_model.py` (número de blocos convolucionais, uso de batch normalization/dropout, estratégia de validação/early stopping).
+O modelo implementado em `train_model.py` é uma **Rede Neural Convolucional (CNN)** sequencial composta por **três blocos convolucionais**, seguidos de uma camada densa de classificação:
+
+- **Bloco 1:** `Conv2D` (32 filtros) → `BatchNormalization` → `MaxPooling2D`
+- **Bloco 2:** `Conv2D` (64 filtros) → `BatchNormalization` → `MaxPooling2D`
+- **Bloco 3:** `Conv2D` (128 filtros) → `BatchNormalization` → `MaxPooling2D`
+- **Cabeça de classificação:** `Flatten` → `Dropout` → `Dense` (10 unidades, saída softmax para as 10 classes de dígitos)
+
+O modelo possui um total de **105.098 parâmetros** (104.650 treináveis e 448 não-treináveis, referentes às camadas de Batch Normalization).
+
+A **Batch Normalization** é aplicada após cada camada convolucional, estabilizando e acelerando o treinamento ao normalizar as ativações intermediárias. Já a camada de **Dropout**, posicionada antes da camada densa final, atua como regularização, reduzindo o risco de overfitting ao "desligar" aleatoriamente neurônios durante o treinamento.
+
+Quanto à estratégia de validação, o modelo foi configurado para treinar por até **15 épocas**, com uma divisão de dados de treino/validação. O treinamento foi interrompido automaticamente na **7ª época**, evidenciando o uso de **Early Stopping** monitorando a métrica de validação — mecanismo que interrompe o treinamento quando não há mais ganho relevante de performance, evitando overfitting e economizando tempo de computação.
 
 ### 2️⃣ Bibliotecas Utilizadas
 
-Liste as principais bibliotecas utilizadas, preferencialmente com suas versões.
+O `requirements.txt` do projeto define:
+
+- **TensorFlow** (`>=2.12`) — na execução local, a versão instalada foi a **2.21.0**, trazendo **Keras 3.15.0** embutido, usados para construção, treinamento (`tf.keras`) e conversão/otimização do modelo (`tf.lite`)
+- **NumPy** — versão instalada: **2.4.4**, usada na manipulação dos arrays de imagem em `run_inference.py`
 
 ### 3️⃣ Técnica de Otimização do Modelo
 
-Explique qual técnica foi utilizada para otimizar o modelo em `optimize_model.py`.
+A técnica utilizada em `optimize_model.py` foi a **Quantização Dinâmica de Faixa (Dynamic Range Quantization)**, aplicada via TensorFlow Lite Converter:
+
+```python
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+tflite_model = converter.convert()
+```
+
+Essa técnica converte os pesos do modelo (originalmente em ponto flutuante de 32 bits) para uma representação de **8 bits inteiros**, mantendo as ativações em ponto flutuante durante a inferência. O resultado é um modelo significativamente menor em disco e mais rápido para execução em dispositivos com recursos limitados (Edge AI), com impacto mínimo na acurácia — trade-off ideal para sistemas embarcados.
 
 ### 4️⃣ Resultados Obtidos
 
-Informe a acurácia de validação obtida e o tamanho dos arquivos `model.h5` e `model.tflite`.
+- **Acurácia de validação final:** 98,85% (0.9885)
+- **Acurácia no conjunto de teste:** 99,08% (0.9908)
+- **Tamanho do `model.h5`:** 1.294,88 KB (≈ 1,26 MB)
+- **Tamanho do `model.tflite`:** 113,96 KB
+- **Redução de tamanho:** 91,2%
 
 ### 5️⃣ Comentários Adicionais (Opcional)
 
-Dificuldades encontradas, decisões técnicas importantes, limitações do modelo, aprendizados durante o desafio.
+Durante a execução do desafio, a principal dificuldade encontrada foi de natureza operacional, relacionada ao ambiente Windows/Git Bash: o ambiente virtual (`.venv`) não estava ativado por padrão em novas sessões do terminal, o que gerava erros de `ModuleNotFoundError` ao tentar rodar os scripts sem ativação prévia (`source .venv/Scripts/activate`).
+
+Também foi identificada uma inversão de conteúdo entre os arquivos `optimize_model.py` e `run_inference.py`: o arquivo `optimize_model.py` continha, por engano, o código de inferência (carregamento direto do `model.tflite`, ainda inexistente naquele momento), o que gerava um erro de `ValueError: Could not open model.tflite`. Após identificar e corrigir a troca — restaurando o código de conversão (`TFLiteConverter` com `Dynamic Range Quantization`) em `optimize_model.py` — o pipeline foi executado com sucesso, do treinamento até a inferência.
+
+Como aprendizado técnico, destaca-se o ganho expressivo obtido com a quantização dinâmica: uma redução de aproximadamente 91% no tamanho do modelo, com impacto mínimo esperado na acurácia, reforçando a relevância dessa técnica para cenários de Edge AI, onde recursos de armazenamento e processamento são limitados.
 
 ### 6️⃣ Exemplo de Inferência
 
-Cole a saída do terminal ao rodar `run_inference.py` (predito vs. real para as 5+ amostras), e comente brevemente se houve algum caso interessante (acerto ou erro) entre as amostras testadas.
+```
+Rodando inferencia em 5 amostras usando model.tflite:
+
+Amostra 1: predito=7 | real=7
+Amostra 2: predito=2 | real=2
+Amostra 3: predito=1 | real=1
+Amostra 4: predito=0 | real=0
+Amostra 5: predito=4 | real=4
+```
+
+O modelo otimizado (`model.tflite`) acertou **100% das 5 amostras testadas** do conjunto de teste do MNIST, incluindo dígitos com formas visualmente distintas (0, 1, 2, 4, 7). O resultado confirma que, apesar da redução de ~91% no tamanho do arquivo por meio da quantização dinâmica, o modelo manteve sua capacidade de classificação intacta nesse conjunto de amostras — evidência de que a técnica de otimização não comprometeu a qualidade das predições.
